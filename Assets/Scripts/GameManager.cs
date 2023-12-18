@@ -9,11 +9,11 @@ public class GameManager : MonoBehaviour
         if (!NetworkManager.Instance.IsConnected)
         {
             if (GUILayout.Button("Connect"))
-                NetworkManager.Instance.Connect();
+                NetworkManager.Instance.OnConnect();
         }
         else
         {
-            if (!NetworkManager.Instance.IsLoggedIn)
+            if (!NetworkManager.Instance.HasClientID)
             {
                 GUILayout.Label("Waiting to be assigned an ID...");
             }
@@ -21,6 +21,9 @@ public class GameManager : MonoBehaviour
             {
                 GUILayout.Label($"Connected as client: {NetworkManager.Instance.ClientID}");
             }
+
+            if (GUILayout.Button("Disconnect"))
+                NetworkManager.Instance.OnDisconnect();
         }
         GUILayout.EndArea();
     }

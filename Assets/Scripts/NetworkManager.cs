@@ -18,8 +18,16 @@ public class NetworkManager : MonoBehaviour
 
     private TcpClient tcpClient;
     private Thread tcpReceiveThread;
+    private const int tcpReceiveBufferSize = 1024;
     private UdpClient udpClient;
     private Thread udpReceiveThread;
+
+    enum DisconnectReasons
+    {
+        OnDestroy,
+        UserRequestedDisconnect,
+        ServerClosedConnection
+    }
 
     private bool isConnected = false;
     public bool IsConnected
@@ -28,7 +36,7 @@ public class NetworkManager : MonoBehaviour
     }
 
     private bool hasClientID = false;
-    public bool IsLoggedIn
+    public bool HasClientID
     {
         get { return hasClientID; }
     }
@@ -57,7 +65,19 @@ public class NetworkManager : MonoBehaviour
         }
     }
 
-    public void Connect()
+    public void OnConnect()
+    {
+        try
+        {
+            ConnectToServer();
+        }
+        catch (Exception ex)
+        {
+            Debug.Log($"Error connecting to server: {ex.Message}");
+        }
+    }
+
+    private void ConnectToServer()
     {
         tcpClient = new TcpClient();
         tcpClient.Connect(serverHostname, serverTcpPort);
@@ -76,37 +96,76 @@ public class NetworkManager : MonoBehaviour
         isConnected = true;
     }
 
-    public void Login()
+    public void OnDisconnect()
     {
-        if (!isConnected)
+        try
+        {
+            DisconnectFromServer(DisconnectReasons.UserRequestedDisconnect);
+        }
+        catch (Exception ex)
+        {
+            Debug.Log($"Error disconnecting from server: {ex.Message}");
+        }
+    }
+
+    private void DisconnectFromServer(DisconnectReasons reason)
+    {
+        Debug.Log("Disconnecting from server");
+
+        Debug.Log("Closing TCP client");
+        if (tcpClient != null)
+        {
+            tcpClient.Close();
+            tcpClient = null;
+        }
+
+        Debug.Log("Aborting TCP receive thread");
+        if (tcpReceiveThread != null)
+        {
+            if (reason != DisconnectReasons.ServerClosedConnection)
+                tcpReceiveThread.Abort();
+            tcpReceiveThread = null;
+        }
+
+        Debug.Log("Closing UDP client");
+        if (udpClient != null)
+        {
+            udpClient.Close();
+            udpClient = null;
+        }
+
+        Debug.Log("Aborting UDP receive thread");
+        if (udpReceiveThread != null)
+        {
+            udpReceiveThread.Abort();
+            udpReceiveThread = null;
+        }   
+
+        Debug.Log("Resetting client state");
+        clientID = 0;
+        hasClientID = false;
+        isConnected = false;
+    }
+
+    public void PingUDP()
+    {
+        if (!isConnected || !hasClientID)
             return;
 
-        // Send a login message to the server to identify this client and retrieve the client ID
-        Message loginMessage = new Message()
+        ClientPingMessage pingMessage = new ClientPingMessage
         {
-            type = "cli",
+            clientID = clientID,
+            type = MessageTypes.ClientPing,
         };
-        string loginMessageJson = JsonUtility.ToJson(loginMessage);
-        Debug.Log($"Sending TCP message: {loginMessageJson}");
-        byte[] loginMessageBytes = Encoding.UTF8.GetBytes(loginMessageJson);
-        tcpClient.GetStream().Write(loginMessageBytes, 0, loginMessageBytes.Length);
+
+        string jsonMessage = JsonUtility.ToJson(pingMessage);
+        byte[] data = Encoding.UTF8.GetBytes(jsonMessage);
+        udpClient.Send(data, data.Length);
     }
 
     void OnDestroy()
     {
-        if (tcpClient!= null)
-        {
-            // Close the TCP client and stop the receive thread when done
-            tcpClient.Close();
-            tcpReceiveThread.Join();
-        }
-
-        if (udpClient != null)
-        {
-            // Close the UDP client and stop the receive thread when done
-            udpClient.Close();
-            udpReceiveThread.Join();
-        }
+        DisconnectFromServer(DisconnectReasons.OnDestroy);
     }
 
     private void ReceiveTcpMessages()
@@ -117,7 +176,7 @@ public class NetworkManager : MonoBehaviour
         try
         {
             NetworkStream stream = tcpClient.GetStream();
-            byte[] buffer = new byte[1024];
+            byte[] buffer = new byte[tcpReceiveBufferSize];
 
             while (true)
             {
@@ -133,10 +192,11 @@ public class NetworkManager : MonoBehaviour
 
                 switch (message.type)
                 {
-                    case "aid":
+                    case MessageTypes.ServerAssignID:
                         AssignIDMessage assignIDMessage = JsonUtility.FromJson<AssignIDMessage>(receivedMessage);
                         clientID = assignIDMessage.payload.clientID;
                         hasClientID = true;
+                        PingUDP();
                         break;
                     default:
                         Debug.Log($"Unknown message type: {message.type}");
@@ -148,6 +208,9 @@ public class NetworkManager : MonoBehaviour
         {
             Debug.Log($"Error receiving TCP messages: {ex.Message}");
         }
+            
+        // If we get here, assume the connection has been closed
+        DisconnectFromServer(DisconnectReasons.ServerClosedConnection);
     }
 
     private void ReceiveUdpMessages()
@@ -166,7 +229,25 @@ public class NetworkManager : MonoBehaviour
 
                 Console.WriteLine($"Received UDP message: {receivedMessage}");
 
-                // TODO: parse and handle messages
+                Message message = JsonUtility.FromJson<Message>(receivedMessage);
+                Debug.Log($"Received UDP message of type: {message.type}");
+
+                switch (message.type)
+                {
+                    case MessageTypes.ServerPong:
+                        ServerPongMessage pongMessage = JsonUtility.FromJson<ServerPongMessage>(receivedMessage);
+                        Debug.Log($"Received UDP Pong from server");
+                        break;
+                    
+                    case MessageTypes.ServerGameUpdate:
+                        ServerGameUpdateMessage gameUpdateMessage = JsonUtility.FromJson<ServerGameUpdateMessage>(receivedMessage);
+                        Debug.Log($"Received UDP GameUpdate from server");
+                        break;
+                    
+                    default:
+                        Debug.Log($"Unknown message type: {message.type}");
+                        break;
+                }
             }
         }
         catch (Exception ex)
