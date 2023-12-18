@@ -7,8 +7,6 @@ using System.Net;
 
 public class NetworkManager : MonoBehaviour
 {
-
-
     [SerializeField]
     private string serverHostname = "10.8.0.1";
     [SerializeField]
@@ -111,15 +109,13 @@ public class NetworkManager : MonoBehaviour
     private void DisconnectFromServer(DisconnectReasons reason)
     {
         Debug.Log("Disconnecting from server");
-
-        Debug.Log("Closing TCP client");
+        
         if (tcpClient != null)
         {
             tcpClient.Close();
             tcpClient = null;
         }
 
-        Debug.Log("Aborting TCP receive thread");
         if (tcpReceiveThread != null)
         {
             if (reason != DisconnectReasons.ServerClosedConnection)
@@ -127,21 +123,18 @@ public class NetworkManager : MonoBehaviour
             tcpReceiveThread = null;
         }
 
-        Debug.Log("Closing UDP client");
         if (udpClient != null)
         {
             udpClient.Close();
             udpClient = null;
         }
 
-        Debug.Log("Aborting UDP receive thread");
         if (udpReceiveThread != null)
         {
             udpReceiveThread.Abort();
             udpReceiveThread = null;
         }   
 
-        Debug.Log("Resetting client state");
         clientID = 0;
         hasClientID = false;
         isConnected = false;
