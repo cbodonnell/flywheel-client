@@ -119,6 +119,9 @@ public class NetworkManager : MonoBehaviour
         if (tcpReceiveThread != null)
         {
             if (reason != DisconnectReasons.ServerClosedConnection)
+                // if the server closed the connection, we don't want to abort the thread
+                // since the disconnect originated from the receive thread
+                // TODO: there's probably a better way to handle this   
                 tcpReceiveThread.Abort();
             tcpReceiveThread = null;
         }
@@ -189,6 +192,8 @@ public class NetworkManager : MonoBehaviour
                         AssignIDMessage assignIDMessage = JsonUtility.FromJson<AssignIDMessage>(receivedMessage);
                         clientID = assignIDMessage.payload.clientID;
                         hasClientID = true;
+                        // Send a UDP ping to the server once we have our client ID
+                        // this shouldn't be necessary once real identity is implemented
                         PingUDP();
                         break;
                     default:
