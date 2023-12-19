@@ -286,5 +286,36 @@ public class NetworkManager : MonoBehaviour
             Debug.LogError("Error sending player update via UDP: " + ex.Message);
         }
     }
+    public void SendPlayerInput(float horizontal, float vertical, bool jump)
+    {
+        // Create the payload for the player input message
+        ClientPlayerInputPayload inputPayload = new ClientPlayerInputPayload
+        {
+            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            horizontal = horizontal,
+            vertical = vertical,
+            jump = jump
+        };
 
+        // Create the player input message with the payload
+        ClientPlayerInputMessage inputMessage = new ClientPlayerInputMessage
+        {
+            clientID = clientID,
+            type = MessageTypes.ClientPlayerInput,
+            payload = inputPayload
+        };
+
+        string jsonMessage = JsonUtility.ToJson(inputMessage);
+        Debug.Log(jsonMessage);
+        byte[] data = Encoding.UTF8.GetBytes(jsonMessage);
+        
+        try
+        {
+            udpClient.Send(data, data.Length);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error sending player input via UDP: " + ex.Message);
+        }
+    }
 }

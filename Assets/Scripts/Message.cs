@@ -6,6 +6,7 @@ public static class MessageTypes
     public const string ServerAssignID = "aid";
     public const string ClientPing = "cp";
     public const string ServerPong = "sp";
+    public const string ClientPlayerInput = "cpi";
     public const string ClientPlayerUpdate = "cpu";
     public const string ServerGameUpdate = "sgu";
 }
@@ -73,3 +74,16 @@ public class ClientPlayerUpdatePayload
     public PlayerState playerState;
 }
 
+public class ClientPlayerInputMessage : Message
+{
+    public ClientPlayerInputPayload payload;
+}
+
+[Serializable]
+public class ClientPlayerInputPayload
+{
+    public long timestamp;
+    public float horizontal;
+    public float vertical;
+    public bool jump;
+}
