@@ -28,6 +28,7 @@ public class PlayerController : MonoBehaviour
         CheckGround();
         Move();
         ApplyGravity();
+        NetworkManager.Instance.SendClientPlayerUpdate(transform.position);
     }
 
     void HandleInput()

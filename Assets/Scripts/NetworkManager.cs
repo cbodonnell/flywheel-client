@@ -8,7 +8,8 @@ using System.Net;
 public class NetworkManager : MonoBehaviour
 {
     [SerializeField]
-    private string serverHostname = "10.8.0.1";
+    // private string serverHostname = "10.8.0.1"
+    private string serverHostname = "127.8.0.1";
     [SerializeField]
     private int serverTcpPort = 8888;
     [SerializeField]
@@ -109,7 +110,7 @@ public class NetworkManager : MonoBehaviour
     private void DisconnectFromServer(DisconnectReasons reason)
     {
         Debug.Log("Disconnecting from server");
-        
+
         if (tcpClient != null)
         {
             tcpClient.Close();
@@ -136,7 +137,7 @@ public class NetworkManager : MonoBehaviour
         {
             udpReceiveThread.Abort();
             udpReceiveThread = null;
-        }   
+        }
 
         clientID = 0;
         hasClientID = false;
@@ -206,7 +207,7 @@ public class NetworkManager : MonoBehaviour
         {
             Debug.Log($"Error receiving TCP messages: {ex.Message}");
         }
-            
+
         // If we get here, assume the connection has been closed
         DisconnectFromServer(DisconnectReasons.ServerClosedConnection);
     }
@@ -236,12 +237,12 @@ public class NetworkManager : MonoBehaviour
                         ServerPongMessage pongMessage = JsonUtility.FromJson<ServerPongMessage>(receivedMessage);
                         Debug.Log($"Received UDP Pong from server");
                         break;
-                    
+
                     case MessageTypes.ServerGameUpdate:
                         ServerGameUpdateMessage gameUpdateMessage = JsonUtility.FromJson<ServerGameUpdateMessage>(receivedMessage);
                         Debug.Log($"Received UDP GameUpdate from server");
                         break;
-                    
+
                     default:
                         Debug.Log($"Unknown message type: {message.type}");
                         break;
@@ -253,4 +254,37 @@ public class NetworkManager : MonoBehaviour
             Console.WriteLine($"Error receiving UDP messages: {ex.Message}");
         }
     }
+    public void SendClientPlayerUpdate(Vector2 position)
+    {
+        // Create the payload for the player update message
+        ClientPlayerUpdatePayload updatePayload = new ClientPlayerUpdatePayload
+        {
+            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            playerState = new PlayerState
+            {
+                p = new Position { x = position.x, y = position.y }
+            }
+        };
+
+        // Create the player update message with the payload
+        ClientPlayerUpdateMessage playerUpdateMessage = new ClientPlayerUpdateMessage
+        {
+            clientID = clientID,
+            type = MessageTypes.ClientPlayerUpdate,
+            payload = updatePayload
+        };
+
+        string jsonMessage = JsonUtility.ToJson(playerUpdateMessage);
+        byte[] data = Encoding.UTF8.GetBytes(jsonMessage);
+
+        try
+        {
+            udpClient.Send(data, data.Length);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error sending player update via UDP: " + ex.Message);
+        }
+    }
+
 }

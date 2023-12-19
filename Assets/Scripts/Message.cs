@@ -6,6 +6,7 @@ public static class MessageTypes
     public const string ServerAssignID = "aid";
     public const string ClientPing = "cp";
     public const string ServerPong = "sp";
+    public const string ClientPlayerUpdate = "cpu";
     public const string ServerGameUpdate = "sgu";
 }
 
@@ -58,5 +59,17 @@ public class Position
 {
     public float x;
     public float y;
+}
+
+public class ClientPlayerUpdateMessage : Message
+{
+    public ClientPlayerUpdatePayload payload;
+}
+
+[Serializable]
+public class ClientPlayerUpdatePayload
+{
+    public long timestamp;
+    public PlayerState playerState;
 }
 
