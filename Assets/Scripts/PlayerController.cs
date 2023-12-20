@@ -11,52 +11,30 @@ public class PlayerController : MonoBehaviour
 
     private Rigidbody2D rb;
     private bool isGrounded;
-    private bool jumpRequested = false;
-    private NetworkManager networkManager;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         groundLayer = LayerMask.GetMask("Ground");
-        networkManager = FindObjectOfType<NetworkManager>(); // Find and store a reference to the NetworkManager
     }
 
     void Update()
     {
         HandleInput();
-
-        // Check for jump input, set to true for next FixedUpdate
-        if (Input.GetButtonDown("Jump") && isGrounded)
-        {
-            jumpRequested = true;
-        }
     }
 
     void FixedUpdate()
     {
         CheckGround();
-        // Comment out Move and ApplyGravity for now, as they will be handled server-side
-        // Move();
-        // ApplyGravity();
-
-        // ClientPlayerUpdate
-        // NetworkManager.Instance.SendClientPlayerUpdate(transform.position);
-
-        // ClientPlayerInput
-        float horizontalInput = Input.GetAxis("Horizontal");
-        NetworkManager.Instance.SendClientPlayerInput(horizontalInput, 0f, jumpRequested);
-        // Reset jumpRequested flag
-        if (jumpRequested)
-        {
-            jumpRequested = false;
-        }
+        Move();
+        ApplyGravity();
+        NetworkManager.Instance.SendClientPlayerUpdate(transform.position);
     }
 
     void HandleInput()
     {
         if (Input.GetButtonDown("Jump") && isGrounded)
         {
-            // Temporarily apply jump for immediate responsiveness
             Jump();
         }
     }
@@ -68,7 +46,6 @@ public class PlayerController : MonoBehaviour
 
     void Move()
     {
-        // This method can be modified or removed based on server-side implementation
         float horizontalInput = Input.GetAxis("Horizontal");
         Vector2 movement = new Vector2(horizontalInput, 0f);
         rb.velocity = new Vector2(movement.x * moveSpeed, rb.velocity.y);
@@ -76,13 +53,11 @@ public class PlayerController : MonoBehaviour
 
     void Jump()
     {
-        // Temporarily apply jump force
         rb.velocity = new Vector2(rb.velocity.x, jumpForce);
     }
 
     void ApplyGravity()
     {
-        // This method can be modified or removed based on server-side implementation
         rb.velocity -= Vector2.down * Physics2D.gravity.y * gravityMultiplier * Time.fixedDeltaTime;
     }
 }
