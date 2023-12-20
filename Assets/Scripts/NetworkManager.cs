@@ -258,6 +258,7 @@ public class NetworkManager : MonoBehaviour
             Console.WriteLine($"Error receiving UDP messages: {ex.Message}");
         }
     }
+    
     public void SendClientPlayerUpdate(Vector2 position)
     {
         // Create the payload for the player update message
