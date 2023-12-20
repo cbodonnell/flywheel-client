@@ -215,7 +215,10 @@ public class NetworkManager : MonoBehaviour
     private void ReceiveUdpMessages()
     {
         if (udpClient == null)
+        {
+            Debug.LogError("UDP Client is null, exiting ReceiveUdpMessages");
             return;
+        }
 
         try
         {
@@ -223,11 +226,21 @@ public class NetworkManager : MonoBehaviour
 
             while (true)
             {
+                Debug.Log("Waiting for UDP data...");
                 byte[] receivedData = udpClient.Receive(ref remoteEndpoint);
+                if (receivedData.Length == 0)
+                {
+                    Debug.LogWarning("Received empty UDP packet, continuing loop...");
+                    continue;
+                }
+
                 string receivedMessage = Encoding.UTF8.GetString(receivedData);
 
                 Console.WriteLine($"Received UDP message: {receivedMessage}");
-
+                
+                // Add this to log the raw JSON
+                Debug.Log("Raw JSON payload: " + receivedMessage);
+                
                 Message message = JsonUtility.FromJson<Message>(receivedMessage);
                 Debug.Log($"Received UDP message of type: {message.type}");
 
@@ -253,12 +266,20 @@ public class NetworkManager : MonoBehaviour
                 }
             }
         }
+        catch (SocketException sockEx)
+        {
+            Debug.LogError($"SocketException in ReceiveUdpMessages: {sockEx}");
+        }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error receiving UDP messages: {ex.Message}");
+            Debug.LogError($"Exception in ReceiveUdpMessages: {ex}");
+        }
+        finally
+        {
+            Debug.Log("Exited UDP receive loop - this should not happen unless the client is disconnecting");
         }
     }
-    
+
     public void SendClientPlayerUpdate(Vector2 position)
     {
         // Create the payload for the player update message
@@ -295,27 +316,23 @@ public class NetworkManager : MonoBehaviour
 
     private void HandleGameUpdate(ServerGameUpdatePayload payload)
     {
-        // Process the game update payload
+        if (payload == null)
+        {
+            Debug.LogError("Received a null payload in HandleGameUpdate.");
+            return;
+        }
+
+        if (payload.players == null)
+        {
+            Debug.LogError("Players dictionary in payload is null.");
+            return;
+        }
+
+        // Log the payload for debugging purposes.
         Debug.Log($"Received Game Update at timestamp: {payload.timestamp}");
         foreach (var playerEntry in payload.players)
         {
-            Debug.Log($"Player ID: {playerEntry.Key}, Position: {playerEntry.Value.p.x}, {playerEntry.Value.p.y}");
-
-            // Update player positions or other game state based on this data
-            // Example: Find the player GameObject and update its position
-            UpdatePlayerPosition(playerEntry.Key, playerEntry.Value.p.x, playerEntry.Value.p.y);
+            Debug.Log($"Player ID: {playerEntry.Key}, Position: X: {playerEntry.Value.p.x}, Y: {playerEntry.Value.p.y}");
         }
     }
-
-    // Example method to update player position in the game
-    private void UpdatePlayerPosition(uint playerId, float x, float y)
-    {
-        // Implement logic to find the player GameObject and update its position
-        // For example, if you have a dictionary of player GameObjects indexed by playerId:
-        // if (playerGameObjects.ContainsKey(playerId))
-        // {
-        //     playerGameObjects[playerId].transform.position = new Vector2(x, y);
-        // }
-    }
-
 }
