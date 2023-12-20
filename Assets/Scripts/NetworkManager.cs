@@ -279,7 +279,7 @@ public class NetworkManager : MonoBehaviour
         };
 
         string jsonMessage = JsonUtility.ToJson(playerUpdateMessage);
-        Debug.Log(jsonMessage);
+        // Debug.Log(jsonMessage);
         byte[] data = Encoding.UTF8.GetBytes(jsonMessage);
 
         try
