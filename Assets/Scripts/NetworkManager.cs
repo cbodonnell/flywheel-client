@@ -294,11 +294,27 @@ public class NetworkManager : MonoBehaviour
 
     private void HandleGameUpdate(ServerGameUpdatePayload payload)
     {
-        // Here you can process the game update payload
+        // Process the game update payload
+        Debug.Log($"Received Game Update at timestamp: {payload.timestamp}");
         foreach (var playerEntry in payload.players)
         {
-            Debug.Log($"HandleGameUpdate: Player ID: {playerEntry.Key}, Position: {playerEntry.Value.p.x}, {playerEntry.Value.p.y}");
+            Debug.Log($"Player ID: {playerEntry.Key}, Position: {playerEntry.Value.p.x}, {playerEntry.Value.p.y}");
+
             // Update player positions or other game state based on this data
+            // Example: Find the player GameObject and update its position
+            UpdatePlayerPosition(playerEntry.Key, playerEntry.Value.p.x, playerEntry.Value.p.y);
         }
     }
+
+    // Example method to update player position in the game
+    private void UpdatePlayerPosition(uint playerId, float x, float y)
+    {
+        // Implement logic to find the player GameObject and update its position
+        // For example, if you have a dictionary of player GameObjects indexed by playerId:
+        // if (playerGameObjects.ContainsKey(playerId))
+        // {
+        //     playerGameObjects[playerId].transform.position = new Vector2(x, y);
+        // }
+    }
+
 }
