@@ -4,6 +4,7 @@ using System.Threading;
 using System.Text;
 using System;
 using System.Net;
+using Newtonsoft.Json;
 
 public class NetworkManager : MonoBehaviour
 {
@@ -236,27 +237,23 @@ public class NetworkManager : MonoBehaviour
 
                 string receivedMessage = Encoding.UTF8.GetString(receivedData);
 
-                Console.WriteLine($"Received UDP message: {receivedMessage}");
-                
-                // Add this to log the raw JSON
+                // Log the raw JSON for debugging
                 Debug.Log("Raw JSON payload: " + receivedMessage);
                 
-                Message message = JsonUtility.FromJson<Message>(receivedMessage);
+                // Use Json.NET for deserialization
+                var message = JsonConvert.DeserializeObject<Message>(receivedMessage);
                 Debug.Log($"Received UDP message of type: {message.type}");
 
                 switch (message.type)
                 {
                     case MessageTypes.ServerPong:
-                        ServerPongMessage pongMessage = JsonUtility.FromJson<ServerPongMessage>(receivedMessage);
+                        var pongMessage = JsonConvert.DeserializeObject<ServerPongMessage>(receivedMessage);
                         Debug.Log($"Received UDP Pong from server");
                         break;
 
                     case MessageTypes.ServerGameUpdate:
-                        ServerGameUpdateMessage gameUpdateMessage = JsonUtility.FromJson<ServerGameUpdateMessage>(receivedMessage);
+                        var gameUpdateMessage = JsonConvert.DeserializeObject<ServerGameUpdateMessage>(receivedMessage);
                         Debug.Log($"Received UDP GameUpdate from server");
-                        Debug.Log(gameUpdateMessage.payload);
-
-                        // Now you can access gameUpdateMessage.payload.timestamp, gameUpdateMessage.payload.players, etc.
                         HandleGameUpdate(gameUpdateMessage.payload);
                         break;
 
