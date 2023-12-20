@@ -9,7 +9,7 @@ public class NetworkManager : MonoBehaviour
 {
     [SerializeField]
     // private string serverHostname = "10.8.0.1"
-    private string serverHostname = "127.8.0.1";
+    private string serverHostname = "127.0.0.1";
     [SerializeField]
     private int serverTcpPort = 8888;
     [SerializeField]
@@ -275,6 +275,7 @@ public class NetworkManager : MonoBehaviour
         };
 
         string jsonMessage = JsonUtility.ToJson(playerUpdateMessage);
+        // Debug.Log(jsonMessage);
         byte[] data = Encoding.UTF8.GetBytes(jsonMessage);
 
         try
@@ -286,7 +287,7 @@ public class NetworkManager : MonoBehaviour
             Debug.LogError("Error sending player update via UDP: " + ex.Message);
         }
     }
-    public void SendPlayerInput(float horizontal, float vertical, bool jump)
+    public void SendClientPlayerInput(float horizontal, float vertical, bool jump)
     {
         // Create the payload for the player input message
         ClientPlayerInputPayload inputPayload = new ClientPlayerInputPayload
@@ -306,7 +307,7 @@ public class NetworkManager : MonoBehaviour
         };
 
         string jsonMessage = JsonUtility.ToJson(inputMessage);
-        Debug.Log(jsonMessage);
+        // Debug.Log(jsonMessage);
         byte[] data = Encoding.UTF8.GetBytes(jsonMessage);
         
         try

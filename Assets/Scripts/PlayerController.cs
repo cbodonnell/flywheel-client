@@ -11,6 +11,7 @@ public class PlayerController : MonoBehaviour
 
     private Rigidbody2D rb;
     private bool isGrounded;
+    private bool jumpRequested = false;
     private NetworkManager networkManager;
 
     void Start()
@@ -23,6 +24,12 @@ public class PlayerController : MonoBehaviour
     void Update()
     {
         HandleInput();
+
+        // Check for jump input, set to true for next FixedUpdate
+        if (Input.GetButtonDown("Jump") && isGrounded)
+        {
+            jumpRequested = true;
+        }
     }
 
     void FixedUpdate()
@@ -31,7 +38,18 @@ public class PlayerController : MonoBehaviour
         // Comment out Move and ApplyGravity for now, as they will be handled server-side
         // Move();
         // ApplyGravity();
-        SendInputToServer();
+
+        // ClientPlayerUpdate
+        // NetworkManager.Instance.SendClientPlayerUpdate(transform.position);
+
+        // ClientPlayerInput
+        float horizontalInput = Input.GetAxis("Horizontal");
+        NetworkManager.Instance.SendClientPlayerInput(horizontalInput, 0f, jumpRequested);
+        // Reset jumpRequested flag
+        if (jumpRequested)
+        {
+            jumpRequested = false;
+        }
     }
 
     void HandleInput()
@@ -66,13 +84,5 @@ public class PlayerController : MonoBehaviour
     {
         // This method can be modified or removed based on server-side implementation
         rb.velocity -= Vector2.down * Physics2D.gravity.y * gravityMultiplier * Time.fixedDeltaTime;
-    }
-
-    void SendInputToServer()
-    {
-        // Capture and send input data to the server
-        float horizontalInput = Input.GetAxis("Horizontal");
-        bool jumpInput = Input.GetButtonDown("Jump");
-        networkManager.SendPlayerInput(horizontalInput, 0f, jumpInput); // Vertical input is 0 for 2D
     }
 }
