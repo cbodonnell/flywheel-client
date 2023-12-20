@@ -241,6 +241,10 @@ public class NetworkManager : MonoBehaviour
                     case MessageTypes.ServerGameUpdate:
                         ServerGameUpdateMessage gameUpdateMessage = JsonUtility.FromJson<ServerGameUpdateMessage>(receivedMessage);
                         Debug.Log($"Received UDP GameUpdate from server");
+                        Debug.Log(gameUpdateMessage.payload);
+
+                        // Now you can access gameUpdateMessage.payload.timestamp, gameUpdateMessage.payload.players, etc.
+                        HandleGameUpdate(gameUpdateMessage.payload);
                         break;
 
                     default:
@@ -275,7 +279,7 @@ public class NetworkManager : MonoBehaviour
         };
 
         string jsonMessage = JsonUtility.ToJson(playerUpdateMessage);
-        // Debug.Log(jsonMessage);
+        Debug.Log(jsonMessage);
         byte[] data = Encoding.UTF8.GetBytes(jsonMessage);
 
         try
@@ -285,6 +289,16 @@ public class NetworkManager : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogError("Error sending player update via UDP: " + ex.Message);
+        }
+    }
+
+    private void HandleGameUpdate(ServerGameUpdatePayload payload)
+    {
+        // Here you can process the game update payload
+        foreach (var playerEntry in payload.players)
+        {
+            Debug.Log($"HandleGameUpdate: Player ID: {playerEntry.Key}, Position: {playerEntry.Value.p.x}, {playerEntry.Value.p.y}");
+            // Update player positions or other game state based on this data
         }
     }
 }
