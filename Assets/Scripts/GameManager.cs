@@ -15,6 +15,9 @@ public class GameManager : MonoBehaviour
 	// Dictionary to keep track of player GameObjects by their IDs
 	private readonly Dictionary<uint, GameObject> playerGameObjects = new Dictionary<uint, GameObject>();
 
+	// Define a hashset to keep track of active players for each GameUpdate
+	private HashSet<uint> activePlayerIDs = new HashSet<uint>();
+
 	// Unity lifecycle method that is called when script instance is being loaded, executed before the game starts and before the Start() method:
 	// Commonly used for initialization tasks that need to be performed once and are independent of other objects (ex: setting initial values or conditions)
 	private void Awake()
@@ -44,25 +47,46 @@ public class GameManager : MonoBehaviour
 	// When subscribed, method is called whenever a game update is received
 	public void HandleGameUpdate(ServerGameUpdatePayload payload)
 	{
-		// Iterates through each player in the payload and passes information to the CreateOrUpdatePlayer method
+		HashSet<uint> updatedPlayerIDs = new HashSet<uint>();
+
+		// Add/Update players based on the payload
 		foreach (var playerInfo in payload.players)
 		{
-			CreateOrUpdatePlayer(playerInfo.Key, new Vector2(playerInfo.Value.p.x, playerInfo.Value.p.y));
+			uint playerId = playerInfo.Key;
+			updatedPlayerIDs.Add(playerId);
+			CreateOrUpdatePlayer(playerId, new Vector2(playerInfo.Value.p.x, playerInfo.Value.p.y));
+		}
+
+		// Check for disconnected players
+		var disconnectedPlayers = new HashSet<uint>(activePlayerIDs);
+		disconnectedPlayers.ExceptWith(updatedPlayerIDs);
+		foreach (var playerId in disconnectedPlayers)
+		{
+			HandlePlayerDisconnection(playerId);
+		}
+
+		// Update the active player list
+		activePlayerIDs = updatedPlayerIDs;
+	}
+
+	void HandlePlayerDisconnection(uint playerId)
+	{
+		if (playerGameObjects.TryGetValue(playerId, out GameObject playerObject))
+		{
+			Destroy(playerObject);
+			playerGameObjects.Remove(playerId);
 		}
 	}
 
 	private void CreateOrUpdatePlayer(uint playerId, Vector2 position)
 	{
-		// Check if there is already a GameObject for given playerID
 		if (playerGameObjects.TryGetValue(playerId, out GameObject playerObject))
 		{
-			// If local player, do nothing
-			if (playerId == NetworkManager.Instance.ClientID)
+			// Update position for remote players
+			if (playerId != NetworkManager.Instance.ClientID)
 			{
-				return;
+				playerObject.transform.position = position;
 			}
-			// If not local player, update position
-			playerObject.transform.position = position;
 		}
 		else
 		{
@@ -71,11 +95,11 @@ public class GameManager : MonoBehaviour
 			newPlayer.name = "Player_" + playerId;
 			playerGameObjects.Add(playerId, newPlayer);
 
-			PlayerController controller = newPlayer.GetComponent<PlayerController>();
-			if (controller != null)
+			// Add PlayerController only if it's the local player
+			if (playerId == NetworkManager.Instance.ClientID)
 			{
-				// controller.isLocalPlayer set to true if playerID matches clientID
-				controller.isLocalPlayer = (playerId == NetworkManager.Instance.ClientID);
+				var controller = newPlayer.AddComponent<PlayerController>();
+				controller.isLocalPlayer = true;
 			}
 		}
 	}
