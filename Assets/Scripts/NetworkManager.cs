@@ -9,8 +9,6 @@ using Newtonsoft.Json;
 
 public class NetworkManager : MonoBehaviour
 {
-    
-
 	[SerializeField]
 	private string serverHostname = "127.0.0.1";
 	[SerializeField]
