@@ -7,6 +7,7 @@ public class PlayerController : MonoBehaviour
     public float jumpForce = 50f;
     public float gravityMultiplier = 5f;
     public float groundCheckRadius = 0.55f;
+    public bool isLocalPlayer = false;
     public LayerMask groundLayer;
 
     private Rigidbody2D rb;
@@ -20,15 +21,21 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        HandleInput();
+        if (isLocalPlayer)
+        {
+            HandleInput();
+        }
     }
 
     void FixedUpdate()
     {
-        CheckGround();
-        Move();
-        ApplyGravity();
-        NetworkManager.Instance.SendClientPlayerUpdate(transform.position);
+        if (isLocalPlayer)
+        {
+            CheckGround();
+            Move();
+            ApplyGravity();
+            NetworkManager.Instance.SendClientPlayerUpdate(transform.position);
+        }
     }
 
     void HandleInput()

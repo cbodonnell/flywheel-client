@@ -40,21 +40,29 @@ public class GameManager : MonoBehaviour
     }
 
     private void CreateOrUpdatePlayer(uint playerId, Vector2 position)
+{
+    if (playerGameObjects.TryGetValue(playerId, out GameObject playerObject))
     {
-        // Check if the player already exists
-        if (playerGameObjects.TryGetValue(playerId, out GameObject playerObject))
+        if (playerId == NetworkManager.Instance.ClientID)
         {
-            // Update the existing player's position
-            playerObject.transform.position = position;
+            // It's the local player, don't update its position from network data
+            return;
         }
-        else
+        playerObject.transform.position = position;
+    }
+    else
+    {
+        GameObject newPlayer = Instantiate(playerPrefab, position, Quaternion.identity);
+        newPlayer.name = "Player_" + playerId;
+        playerGameObjects.Add(playerId, newPlayer);
+
+        PlayerController controller = newPlayer.GetComponent<PlayerController>();
+        if (controller != null)
         {
-            // If the player doesn't exist, create a new one
-            GameObject newPlayer = Instantiate(playerPrefab, position, Quaternion.identity);
-            newPlayer.name = "Player_" + playerId;
-            playerGameObjects.Add(playerId, newPlayer);
+            controller.isLocalPlayer = (playerId == NetworkManager.Instance.ClientID);
         }
     }
+}
 
     private void OnGUI()
     {

@@ -1,13 +1,16 @@
 using UnityEngine;
+using System;
+using System.Text;
+using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using System.Text;
-using System;
-using System.Net;
+using System.Collections.Concurrent;
 using Newtonsoft.Json;
 
 public class NetworkManager : MonoBehaviour
 {
+    private ConcurrentQueue<Action> mainThreadActions = new ConcurrentQueue<Action>();
+
     [SerializeField]
     // private string serverHostname = "10.8.0.1"
     private string serverHostname = "127.0.0.1";
@@ -166,6 +169,12 @@ public class NetworkManager : MonoBehaviour
         DisconnectFromServer(DisconnectReasons.OnDestroy);
     }
 
+    private void Update() {
+        while (mainThreadActions.TryDequeue(out Action action)) {
+            action.Invoke();
+        }
+    }
+
     private void ReceiveTcpMessages()
     {
         if (tcpClient == null)
@@ -245,7 +254,7 @@ public class NetworkManager : MonoBehaviour
 
                 // Log the raw JSON for debugging
                 Debug.Log("Raw JSON payload: " + receivedMessage);
-                
+
                 // Use Json.NET for deserialization
                 var message = JsonConvert.DeserializeObject<Message>(receivedMessage);
                 Debug.Log($"Received UDP message of type: {message.type}");
@@ -257,11 +266,14 @@ public class NetworkManager : MonoBehaviour
                         Debug.Log($"Received UDP Pong from server");
                         break;
 
-                    case MessageTypes.ServerGameUpdate:
+                   case MessageTypes.ServerGameUpdate:
                         var gameUpdateMessage = JsonConvert.DeserializeObject<ServerGameUpdateMessage>(receivedMessage);
                         Debug.Log($"Received UDP GameUpdate from server");
-                        // Raise the event to notify subscribers of the game update
-                        OnGameUpdateReceived?.Invoke(gameUpdateMessage.payload);
+
+                        // Queue the action to handle the game update on the main thread
+                        mainThreadActions.Enqueue(() => {
+                            OnGameUpdateReceived?.Invoke(gameUpdateMessage.payload);
+                        });
                         break;
 
                     default:
