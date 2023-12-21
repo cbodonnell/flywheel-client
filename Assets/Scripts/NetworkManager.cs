@@ -213,6 +213,12 @@ public class NetworkManager : MonoBehaviour
         DisconnectFromServer(DisconnectReasons.ServerClosedConnection);
     }
 
+    // Define a delegate for game update events
+    public delegate void GameUpdateHandler(ServerGameUpdatePayload payload);
+
+    // Define an event based on the delegate
+    public event GameUpdateHandler OnGameUpdateReceived;
+
     private void ReceiveUdpMessages()
     {
         if (udpClient == null)
@@ -254,7 +260,8 @@ public class NetworkManager : MonoBehaviour
                     case MessageTypes.ServerGameUpdate:
                         var gameUpdateMessage = JsonConvert.DeserializeObject<ServerGameUpdateMessage>(receivedMessage);
                         Debug.Log($"Received UDP GameUpdate from server");
-                        HandleGameUpdate(gameUpdateMessage.payload);
+                        // Raise the event to notify subscribers of the game update
+                        OnGameUpdateReceived?.Invoke(gameUpdateMessage.payload);
                         break;
 
                     default:
@@ -308,28 +315,6 @@ public class NetworkManager : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogError("Error sending player update via UDP: " + ex.Message);
-        }
-    }
-
-    private void HandleGameUpdate(ServerGameUpdatePayload payload)
-    {
-        if (payload == null)
-        {
-            Debug.LogError("Received a null payload in HandleGameUpdate.");
-            return;
-        }
-
-        if (payload.players == null)
-        {
-            Debug.LogError("Players dictionary in payload is null.");
-            return;
-        }
-
-        // Log the payload for debugging purposes.
-        Debug.Log($"Received Game Update at timestamp: {payload.timestamp}");
-        foreach (var playerEntry in payload.players)
-        {
-            Debug.Log($"Player ID: {playerEntry.Key}, Position: X: {playerEntry.Value.p.x}, Y: {playerEntry.Value.p.y}");
         }
     }
 }
