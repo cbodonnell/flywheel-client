@@ -9,20 +9,30 @@ using Newtonsoft.Json;
 
 public class NetworkManager : MonoBehaviour
 {
-	[SerializeField]
+	/*
+	NetworkManager:
+	- Manages network connections, sending, and receiving data
+	- Defines connection details including TCP and UDP port settings
+	- Utilizes separate threads for TCP and UDP message handling
+	- Singleton pattern for NetworkManager
+	*/
+
+	// TCP and UDP IP + ports, 127.0.0.1 if server is running on localhost
 	private string serverHostname = "127.0.0.1";
-	[SerializeField]
 	private int serverTcpPort = 8888;
-	[SerializeField]
 	private int serverUdpPort = 8889;
 
-	private ConcurrentQueue<Action> mainThreadActions = new ConcurrentQueue<Action>();
+	// Separate threads for TCP and UDP
+	private const int tcpReceiveBufferSize = 1024;
 	private TcpClient tcpClient;
 	private Thread tcpReceiveThread;
-	private const int tcpReceiveBufferSize = 1024;
 	private UdpClient udpClient;
 	private Thread udpReceiveThread;
 
+	// Thread-safe queue to hold actions that need to be executed on the main Unity thread
+	private ConcurrentQueue<Action> mainThreadActions = new ConcurrentQueue<Action>();
+
+	// Enum for disconnect reasons, by default assigned ints: OnDestroy = 1, UserRequestedDisconnect = 2, ServerClosedConnection = 3
 	enum DisconnectReasons
 	{
 		OnDestroy,
@@ -30,6 +40,7 @@ public class NetworkManager : MonoBehaviour
 		ServerClosedConnection
 	}
 
+	// Used for tracking connection state, where client has an ID, and the client ID itself
 	private bool isConnected = false;
 	public bool IsConnected
 	{
@@ -48,7 +59,7 @@ public class NetworkManager : MonoBehaviour
 		get { return clientID; }
 	}
 
-	// Singleton pattern
+	// Singleton pattern to ensure only one instance of NetworkManager throughout the game, global point of access, and persistence
 	private static NetworkManager _Instance;
 	public static NetworkManager Instance
 	{
@@ -56,10 +67,10 @@ public class NetworkManager : MonoBehaviour
 		{
 			if (!_Instance)
 			{
+				// Create new GameObject, add Networkmanager as component
 				_Instance = new GameObject().AddComponent<NetworkManager>();
-				// name it for easy recognition
 				_Instance.name = _Instance.GetType().ToString();
-				// mark root as DontDestroyOnLoad();
+				// Ensures object is not destroyed when loading a new scene for persistence
 				DontDestroyOnLoad(_Instance.gameObject);
 			}
 			return _Instance;
@@ -78,19 +89,18 @@ public class NetworkManager : MonoBehaviour
 		}
 	}
 
+	// Establishes TCP and UDP connections and starts receive threads
 	private void ConnectToServer()
 	{
 		tcpClient = new TcpClient();
 		tcpClient.Connect(serverHostname, serverTcpPort);
 
-		// Start a thread for receiving messages
 		tcpReceiveThread = new Thread(ReceiveTcpMessages);
 		tcpReceiveThread.Start();
 
 		udpClient = new UdpClient();
 		udpClient.Connect(serverHostname, serverUdpPort);
 
-		// Start a thread for receiving messages
 		udpReceiveThread = new Thread(ReceiveUdpMessages);
 		udpReceiveThread.Start();
 
@@ -109,6 +119,7 @@ public class NetworkManager : MonoBehaviour
 		}
 	}
 
+	// Closes TCP and UDP connections and aborts receive threads
 	private void DisconnectFromServer(DisconnectReasons reason)
 	{
 		Debug.Log("Disconnecting from server");
@@ -146,6 +157,7 @@ public class NetworkManager : MonoBehaviour
 		isConnected = false;
 	}
 
+	// Sends UDP ping to the server
 	public void PingUDP()
 	{
 		if (!isConnected || !hasClientID)
@@ -162,17 +174,26 @@ public class NetworkManager : MonoBehaviour
 		udpClient.Send(data, data.Length);
 	}
 
+	// Unity lifecycle method called when GameObject attached to this script is destroyed:
+	// DisconnectFromServer method is invoked with reason OnDestroy (for example from changing scences or game closed)
 	void OnDestroy()
 	{
 		DisconnectFromServer(DisconnectReasons.OnDestroy);
 	}
 
+	// Unity lifecycle method called once per frame:
+	// Handles dequeing and executing actions from mainThreadActions to ensure they are ran on the main thread 
+	// *See ReceiveUDPMessages below for example usage)
 	private void Update() {
 		while (mainThreadActions.TryDequeue(out Action action)) {
 			action.Invoke();
 		}
 	}
 
+	// Listens continuously for and processses TCP messages from the server:
+	// TCP Usage: reliable data transfer
+	// Different from UDP because it uses a byte buffer to reads data from a persistent TCP stream
+	// Message types are defined in Message.cs and handled case by case
 	private void ReceiveTcpMessages()
 	{
 		if (tcpClient == null)
@@ -220,12 +241,18 @@ public class NetworkManager : MonoBehaviour
 		DisconnectFromServer(DisconnectReasons.ServerClosedConnection);
 	}
 
-	// Define a delegate for game update events
+	// Define a delegate for game updates, this is similar to a pointer function in other languages:
+	// Can hold references to any method that takes on argument of type ServerGameUpdatePayload where 'payload' is the actual parameter
 	public delegate void GameUpdateHandler(ServerGameUpdatePayload payload);
 
-	// Define an event based on the delegate
+	// Define an event called OnGameUpdatedReceived suing the GameUpdateHandler delegate:
+	// This can be subscribed to from other scripts such as GameManager.cs
 	public event GameUpdateHandler OnGameUpdateReceived;
 
+	// Listens continuously for and processses UDP messages from the server:
+	// UDP Usage: unreliable data transfer
+	// Different from TCP because there is no persistent data stream, data is just sent each time to an address, delivery is not guarenteed
+	// Message types are defined in Message.cs and handled case by case
 	private void ReceiveUdpMessages()
 	{
 		if (udpClient == null)
@@ -268,8 +295,10 @@ public class NetworkManager : MonoBehaviour
 					var gameUpdateMessage = JsonConvert.DeserializeObject<ServerGameUpdateMessage>(receivedMessage);
 					Debug.Log($"Received UDP GameUpdate from server");
 
-					// Queue the action to handle the game update on the main thread
+					// Enqueues method to be executed on the main thread
 					mainThreadActions.Enqueue(() => {
+						// Checks if there are any subscribers to OnGameUpdateReceived and then invokes the event
+						// When the event is invoked, the parameter gameUpdateMessage.payload is passed to all subscribed methods
 						OnGameUpdateReceived?.Invoke(gameUpdateMessage.payload);
 					});
 					break;
@@ -294,6 +323,8 @@ public class NetworkManager : MonoBehaviour
 		}
 	}
 
+	// Method for sending ClientPlayerUpdate (cpu) to the server:
+	// Sends client timestamp and position
 	public void SendClientPlayerUpdate(Vector2 position)
 	{
 		// Create the payload for the player update message

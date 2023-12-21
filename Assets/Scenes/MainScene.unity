@@ -419,7 +419,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ad6342351d5b9f1458c7133513ee83a5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  serverHostname: 10.8.0.1
+  serverHostname: 127.0.0.1
   serverTcpPort: 8888
   serverUdpPort: 8889
 --- !u!4 &2033215655
