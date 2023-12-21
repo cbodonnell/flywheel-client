@@ -13,12 +13,15 @@ public class PlayerController : MonoBehaviour
 	private Rigidbody2D rb;
 	private bool isGrounded;
 
+	// Unity lifecycle method that is called once before the first frame update but after Awake() method:
 	void Start()
 	{
 		rb = GetComponent<Rigidbody2D>();
 		groundLayer = LayerMask.GetMask("Ground");
 	}
 
+	// Unity lifecycle method that is called once per frame, frequency varies depending on client
+	// Commonly used for handling input and animations, where responsiveness to frame changes is important
 	void Update()
 	{
 		if (isLocalPlayer)
@@ -27,6 +30,8 @@ public class PlayerController : MonoBehaviour
 		}
 	}
 
+	// Unity lifecycle method that is called at fixed intervals, frequency set in Unity settings
+	// Commonly used for physics calculations and anything that needs to be independent of frame rate fluctuations
 	void FixedUpdate()
 	{
 		if (isLocalPlayer)
