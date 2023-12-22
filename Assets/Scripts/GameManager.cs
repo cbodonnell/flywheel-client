@@ -15,12 +15,21 @@ public class GameManager : MonoBehaviour
 	// Dictionary to keep track of player GameObjects by their IDs
 	private readonly Dictionary<uint, GameObject> playerGameObjects = new Dictionary<uint, GameObject>();
 
-	// For client interpolation
-	public float smoothTime = 0.3f;
+	// Duration over which the game interpolates between two states of a player:
+	// Smaller values will make movement snappier
+	// Larger value make it smoother, but potentially more laggy
+	[SerializeField]
+	public float smoothTime = 0.8f;
+
+	// Set to 'true' to use Lerp, 'false' for SmoothDamp
+	[SerializeField]
+	public bool useLerpForInterpolation = true; 
 
 	// Define a hashset to keep track of active players for each GameUpdate
+	// Similar to a 'set' in Python, data structure that stores unique values
 	private HashSet<uint> activePlayerIDs = new HashSet<uint>();
 
+	// Class to store historical state of players, used for interpolation
 	public class HistoricalState
 	{
 		public float timestamp;
@@ -29,8 +38,12 @@ public class GameManager : MonoBehaviour
 		// Add other state data as needed, like rotation
 	}
 
-	// At the class level
+	// Keeps track of historical data, such as where a player has been:
+	// Used to determine where to interpolate (i.e. target position)
 	private Dictionary<uint, List<HistoricalState>> playerStateHistory = new Dictionary<uint, List<HistoricalState>>();
+
+	// Keeps track of how fast a player is currently moving:
+	// Used to determine how to interpolation (i.e. rate and smoothness of movement towards target position)
     private Dictionary<uint, Vector2> playerCurrentVelocities = new Dictionary<uint, Vector2>();
 
 	// Unity lifecycle method that is called when script instance is being loaded, executed before the game starts and before the Start() method:
@@ -49,31 +62,47 @@ public class GameManager : MonoBehaviour
 		NetworkManager.Instance.OnGameUpdateReceived += HandleGameUpdate;
 	}
 
+	// Unity lifecycle method that is called once per frame
 	private void Update()
 	{
 		foreach (var kvp in playerGameObjects)
 		{
 			uint playerId = kvp.Key;
 			GameObject playerObject = kvp.Value;
-
+			// Skip local player, since position will be controlled by PlayerController.cs
 			if (playerId == NetworkManager.Instance.ClientID) continue; // Skip local player
 
+			// Check for at least two historical states, which is required for interpolating
 			if (playerStateHistory.TryGetValue(playerId, out var states) && states.Count >= 2)
 			{
+				// Variables for 2nd to last state and last state
 				var state1 = states[states.Count - 2];
 				var state2 = states[states.Count - 1];
 
+				// Interpolation factor 't': indicates how far along this interpolation path to current positon should be
 				float t = (Time.time - state1.timestamp) / (state2.timestamp - state1.timestamp);
+
+				// Clamping keeps value between 0 and 1 in this case to handle edge cases like delayed game updates
+				// i.e. if value is below 0 this will return 0, if value is above 1 this will return 1
 				t = Mathf.Clamp(t, 0, 1);
 
-				Vector2 currentVelocity = playerCurrentVelocities[playerId];
-				Vector2 smoothedPosition = Vector2.SmoothDamp(playerObject.transform.position, 
-															state2.position, 
-															ref currentVelocity, 
-															smoothTime);
-				playerCurrentVelocities[playerId] = currentVelocity;
+				Vector2 newPosition;
+				if (useLerpForInterpolation)
+				{
+					newPosition = Vector2.Lerp(playerObject.transform.position, state2.position, t);
+					Debug.Log($"Lerping: t={t}, Start={playerObject.transform.position}, End={state2.position}, NewPos={newPosition}");
+				}
+				else
+				{
+					Vector2 currentVelocity = playerCurrentVelocities[playerId];
+					newPosition = Vector2.SmoothDamp(playerObject.transform.position, 
+													state2.position, 
+													ref currentVelocity, 
+													smoothTime);
+					playerCurrentVelocities[playerId] = currentVelocity;
+				}
 
-				playerObject.transform.position = new Vector3(smoothedPosition.x, smoothedPosition.y, playerObject.transform.position.z);
+				playerObject.transform.position = new Vector3(newPosition.x, newPosition.y, playerObject.transform.position.z);
 			}
 		}
 	}
@@ -130,6 +159,20 @@ public class GameManager : MonoBehaviour
 		while (playerStateHistory[playerId].Count > 20) // for example, keep the last 20 states
 		{
 			playerStateHistory[playerId].RemoveAt(0);
+		}
+
+		// Update player velocities 
+		if (playerStateHistory[playerId].Count >= 2)
+		{
+			var lastState = playerStateHistory[playerId][playerStateHistory[playerId].Count - 2];
+			Vector2 positionDelta = position - lastState.position;
+			float timeDelta = timestamp - lastState.timestamp;
+
+			if (timeDelta > 0)
+			{
+				Vector2 newVelocity = positionDelta / timeDelta;
+				playerCurrentVelocities[playerId] = newVelocity;
+			}
 		}
 	}
 

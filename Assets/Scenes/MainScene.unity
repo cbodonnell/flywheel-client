@@ -245,6 +245,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerPrefab: {fileID: 9170777264425077601, guid: fc968e3605b277248b905ebbc9d238f7, type: 3}
+  smoothTime: 0.8
+  useLerpForInterpolation: 1
 --- !u!4 &1030962491
 Transform:
   m_ObjectHideFlags: 0
@@ -419,9 +421,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ad6342351d5b9f1458c7133513ee83a5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  serverHostname: 127.0.0.1
-  serverTcpPort: 8888
-  serverUdpPort: 8889
 --- !u!4 &2033215655
 Transform:
   m_ObjectHideFlags: 0
