@@ -15,8 +15,23 @@ public class GameManager : MonoBehaviour
 	// Dictionary to keep track of player GameObjects by their IDs
 	private readonly Dictionary<uint, GameObject> playerGameObjects = new Dictionary<uint, GameObject>();
 
+	// For client interpolation
+	public float smoothTime = 0.3f;
+
 	// Define a hashset to keep track of active players for each GameUpdate
 	private HashSet<uint> activePlayerIDs = new HashSet<uint>();
+
+	public class HistoricalState
+	{
+		public float timestamp;
+		public Vector2 position;
+		public Vector2 currentVelocity;
+		// Add other state data as needed, like rotation
+	}
+
+	// At the class level
+	private Dictionary<uint, List<HistoricalState>> playerStateHistory = new Dictionary<uint, List<HistoricalState>>();
+    private Dictionary<uint, Vector2> playerCurrentVelocities = new Dictionary<uint, Vector2>();
 
 	// Unity lifecycle method that is called when script instance is being loaded, executed before the game starts and before the Start() method:
 	// Commonly used for initialization tasks that need to be performed once and are independent of other objects (ex: setting initial values or conditions)
@@ -34,6 +49,35 @@ public class GameManager : MonoBehaviour
 		NetworkManager.Instance.OnGameUpdateReceived += HandleGameUpdate;
 	}
 
+	private void Update()
+	{
+		foreach (var kvp in playerGameObjects)
+		{
+			uint playerId = kvp.Key;
+			GameObject playerObject = kvp.Value;
+
+			if (playerId == NetworkManager.Instance.ClientID) continue; // Skip local player
+
+			if (playerStateHistory.TryGetValue(playerId, out var states) && states.Count >= 2)
+			{
+				var state1 = states[states.Count - 2];
+				var state2 = states[states.Count - 1];
+
+				float t = (Time.time - state1.timestamp) / (state2.timestamp - state1.timestamp);
+				t = Mathf.Clamp(t, 0, 1);
+
+				Vector2 currentVelocity = playerCurrentVelocities[playerId];
+				Vector2 smoothedPosition = Vector2.SmoothDamp(playerObject.transform.position, 
+															state2.position, 
+															ref currentVelocity, 
+															smoothTime);
+				playerCurrentVelocities[playerId] = currentVelocity;
+
+				playerObject.transform.position = new Vector3(smoothedPosition.x, smoothedPosition.y, playerObject.transform.position.z);
+			}
+		}
+	}
+
 	// Unity lifecycle method called when GameObject attached to this script is destroyed
 	private void OnDestroy()
 	{
@@ -49,12 +93,16 @@ public class GameManager : MonoBehaviour
 	{
 		HashSet<uint> updatedPlayerIDs = new HashSet<uint>();
 
-		// Add/Update players based on the payload
 		foreach (var playerInfo in payload.players)
 		{
 			uint playerId = playerInfo.Key;
 			updatedPlayerIDs.Add(playerId);
-			CreateOrUpdatePlayer(playerId, new Vector2(playerInfo.Value.p.x, playerInfo.Value.p.y));
+
+			// Store historical state
+			StorePlayerState(playerId, new Vector2(playerInfo.Value.p.x, playerInfo.Value.p.y), payload.timestamp);
+
+			// Create or update players
+			CreateOrUpdatePlayer(playerId);
 		}
 
 		// Check for disconnected players
@@ -69,6 +117,22 @@ public class GameManager : MonoBehaviour
 		activePlayerIDs = updatedPlayerIDs;
 	}
 
+	private void StorePlayerState(uint playerId, Vector2 position, float timestamp)
+	{
+		if (!playerStateHistory.ContainsKey(playerId))
+		{
+			playerStateHistory[playerId] = new List<HistoricalState>();
+		}
+
+		playerStateHistory[playerId].Add(new HistoricalState { position = position, timestamp = timestamp });
+
+		// Trim the list to a reasonable size
+		while (playerStateHistory[playerId].Count > 20) // for example, keep the last 20 states
+		{
+			playerStateHistory[playerId].RemoveAt(0);
+		}
+	}
+
 	void HandlePlayerDisconnection(uint playerId)
 	{
 		if (playerGameObjects.TryGetValue(playerId, out GameObject playerObject))
@@ -78,22 +142,17 @@ public class GameManager : MonoBehaviour
 		}
 	}
 
-	private void CreateOrUpdatePlayer(uint playerId, Vector2 position)
+	private void CreateOrUpdatePlayer(uint playerId)
 	{
-		if (playerGameObjects.TryGetValue(playerId, out GameObject playerObject))
-		{
-			// Update position for remote players
-			if (playerId != NetworkManager.Instance.ClientID)
-			{
-				playerObject.transform.position = position;
-			}
-		}
-		else
+		if (!playerGameObjects.TryGetValue(playerId, out GameObject playerObject))
 		{
 			// Instantiate new GameObject for new players
-			GameObject newPlayer = Instantiate(playerPrefab, position, Quaternion.identity);
+			GameObject newPlayer = Instantiate(playerPrefab, Vector2.zero, Quaternion.identity);
 			newPlayer.name = "Player_" + playerId;
 			playerGameObjects.Add(playerId, newPlayer);
+
+			// Initialize currentVelocity for new player
+        	playerCurrentVelocities[playerId] = Vector2.zero;
 
 			// Add PlayerController only if it's the local player
 			if (playerId == NetworkManager.Instance.ClientID)
@@ -104,7 +163,6 @@ public class GameManager : MonoBehaviour
 		}
 	}
 
-	// UI for connecting and disconnecting from the server
 	private void OnGUI()
 	{
 		GUILayout.BeginArea(new Rect(10, 10, 300, 300));
@@ -123,8 +181,8 @@ public class GameManager : MonoBehaviour
 			{
 				GUILayout.Label($"Connected as client: {NetworkManager.Instance.ClientID}");
 
-				// Optionally, create or update the local player object
-				CreateOrUpdatePlayer(NetworkManager.Instance.ClientID, Vector2.zero); // Replace Vector2.zero with actual position
+				// Create or update the local player object
+				CreateOrUpdatePlayer(NetworkManager.Instance.ClientID); // Updated this line
 			}
 
 			if (GUILayout.Button("Disconnect"))
