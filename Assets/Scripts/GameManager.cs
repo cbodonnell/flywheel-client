@@ -206,6 +206,7 @@ public class GameManager : MonoBehaviour
 		}
 	}
 
+	// UI for connecting and disconnecting from the server
 	private void OnGUI()
 	{
 		GUILayout.BeginArea(new Rect(10, 10, 300, 300));
