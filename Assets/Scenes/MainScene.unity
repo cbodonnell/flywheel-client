@@ -245,7 +245,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerPrefab: {fileID: 9170777264425077601, guid: fc968e3605b277248b905ebbc9d238f7, type: 3}
-  smoothTime: 0.8
+  smoothTimeFactor: 0.1
+  lerpTimeFactor: 0
   useLerpForInterpolation: 1
 --- !u!4 &1030962491
 Transform:

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using System.Collections.Generic;
 
@@ -19,11 +20,14 @@ public class GameManager : MonoBehaviour
 	// Smaller values will make movement snappier
 	// Larger value make it smoother, but potentially more laggy
 	[SerializeField]
-	public float smoothTime = 0.8f;
+	public float smoothTimeFactor = 0.1f;
+
+	[SerializeField]
+	public float lerpTimeFactor = 0f;
 
 	// Set to 'true' to use Lerp, 'false' for SmoothDamp
 	[SerializeField]
-	public bool useLerpForInterpolation = true; 
+	public bool useLerpForInterpolation = false; 
 
 	// Define a hashset to keep track of active players for each GameUpdate
 	// Similar to a 'set' in Python, data structure that stores unique values
@@ -65,44 +69,78 @@ public class GameManager : MonoBehaviour
 	// Unity lifecycle method that is called once per frame
 	private void Update()
 	{
+		// Delay for interpolation, should match or be roughly less than game update frequency
+		// Tested sgu receipts on average 90-110 ms
+		float delay = 0.08f; 
+
 		foreach (var kvp in playerGameObjects)
 		{
 			uint playerId = kvp.Key;
 			GameObject playerObject = kvp.Value;
-			// Skip local player, since position will be controlled by PlayerController.cs
-			if (playerId == NetworkManager.Instance.ClientID) continue; // Skip local player
 
-			// Check for at least two historical states, which is required for interpolating
+			// Skip updating the local player's position since it's controlled by PlayerController
+			if (playerId == NetworkManager.Instance.ClientID) continue;
+
+			// Check if there are at least two historical states for interpolation
 			if (playerStateHistory.TryGetValue(playerId, out var states) && states.Count >= 2)
 			{
-				// Variables for 2nd to last state and last state
-				var state1 = states[states.Count - 2];
-				var state2 = states[states.Count - 1];
+				HistoricalState state1 = null;
+				HistoricalState state2 = null;
 
-				// Interpolation factor 't': indicates how far along this interpolation path to current positon should be
-				float t = (Time.time - state1.timestamp) / (state2.timestamp - state1.timestamp);
-
-				// Clamping keeps value between 0 and 1 in this case to handle edge cases like delayed game updates
-				// i.e. if value is below 0 this will return 0, if value is above 1 this will return 1
-				t = Mathf.Clamp(t, 0, 1);
-
-				Vector2 newPosition;
-				if (useLerpForInterpolation)
+				// Iterate through historical states to find the appropriate states for interpolation
+				for (int i = states.Count - 1; i >= 0; i--)
 				{
-					newPosition = Vector2.Lerp(playerObject.transform.position, state2.position, t);
-					Debug.Log($"Lerping: t={t}, Start={playerObject.transform.position}, End={state2.position}, NewPos={newPosition}");
-				}
-				else
-				{
-					Vector2 currentVelocity = playerCurrentVelocities[playerId];
-					newPosition = Vector2.SmoothDamp(playerObject.transform.position, 
-													state2.position, 
-													ref currentVelocity, 
-													smoothTime);
-					playerCurrentVelocities[playerId] = currentVelocity;
+					float convertedTimestamp = ConvertNetworkTimestamp(states[i].timestamp);
+
+					// Select states based on the current time minus the delay
+					if (convertedTimestamp <= Time.time - delay)
+					{
+						state1 = states[i];
+						// Ensure state2 is the next state after state1, or the same if state1 is the latest
+						state2 = i < states.Count - 1 ? states[i + 1] : state1;
+						Debug.Log($"Selected states for player {playerId}: State1 at index {i}, State2 at index {(i < states.Count - 1 ? i + 1 : i)}");
+						break;
+					}
 				}
 
-				playerObject.transform.position = new Vector3(newPosition.x, newPosition.y, playerObject.transform.position.z);
+				// Fallback: use the two most recent states if no states were selected above
+				if (state1 == null || state2 == null)
+				{
+					state1 = states[states.Count - 2];
+					state2 = states[states.Count - 1];
+					Debug.Log($"Fallback states for player {playerId}: State1 at index {states.Count - 2}, State2 at index {states.Count - 1}");
+				}
+
+				// Perform interpolation if valid states were found
+				if (state1 != null && state2 != null)
+				{
+					// Calculate interpolation factor 't'
+					float t = (Time.time - delay - ConvertNetworkTimestamp(state1.timestamp)) / 
+							(ConvertNetworkTimestamp(state2.timestamp) - ConvertNetworkTimestamp(state1.timestamp));
+					t = Mathf.Clamp(t, 0, 1);
+
+					Vector2 newPosition;
+					// Choose interpolation method based on the setting
+					if (useLerpForInterpolation)
+					{
+						// Frame rate independent Lerp using deltaTime
+						float lerpFactor = Time.deltaTime / lerpTimeFactor; // Adjust smoothTime as needed
+						newPosition = Vector2.Lerp(playerObject.transform.position, state2.position, lerpFactor);
+					}
+					else
+					{
+						// SmoothDamp for a smoother transition
+						Vector2 currentVelocity = playerCurrentVelocities[playerId];
+						newPosition = Vector2.SmoothDamp(playerObject.transform.position, 
+														state2.position, 
+														ref currentVelocity, 
+														smoothTimeFactor);
+						playerCurrentVelocities[playerId] = currentVelocity;
+					}
+
+					// Update player's position
+					playerObject.transform.position = new Vector3(newPosition.x, newPosition.y, playerObject.transform.position.z);
+				}
 			}
 		}
 	}
@@ -233,5 +271,14 @@ public class GameManager : MonoBehaviour
 				NetworkManager.Instance.OnDisconnect();
 		}
 		GUILayout.EndArea();
+	}
+
+	private float ConvertNetworkTimestamp(float networkTimestamp)
+	{
+		// Convert from milliseconds to seconds
+		double timestampInSeconds = networkTimestamp / 1000.0;
+		// Calculate the time elapsed since the game started
+		double elapsedTime = timestampInSeconds - (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds + Time.time;
+		return (float)elapsedTime;
 	}
 }
