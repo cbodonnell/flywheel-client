@@ -262,9 +262,6 @@ public class GameManager : MonoBehaviour
 			else
 			{
 				GUILayout.Label($"Connected as client: {NetworkManager.Instance.ClientID}");
-
-				// Create or update the local player object
-				CreateOrUpdatePlayer(NetworkManager.Instance.ClientID); // Updated this line
 			}
 
 			if (GUILayout.Button("Disconnect"))
